@@ -1,0 +1,139 @@
+# =============================================================================
+# kvs-infer: Docker Compose for local CPU-only testing
+# 
+# Usage:
+#   docker-compose up                    # Start in foreground
+#   docker-compose up -d                 # Start in background
+#   docker-compose logs -f               # Follow logs
+#   docker-compose down                  # Stop and remove
+#
+# Environment Variables:
+#   CONFIG      - Path to config file (default: config/cameras.yaml)
+#   REGION      - AWS region (default: us-east-1)
+#   HTTP_PORT   - HTTP server port (default: 8080)
+# =============================================================================
+
+version: '3.8'
+
+services:
+  kvs-infer:
+    container_name: kvs-infer-cpu
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: kvs-infer:latest
+    
+    # CPU-only (no GPU)
+    # For GPU support, use: make docker-run GPU=0
+    
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+    
+    volumes:
+      # Configuration (read-only)
+      - ${CONFIG:-./config/cameras.yaml}:/app/config/cameras.yaml:ro
+      
+      # Models directory (read-only)
+      - ./models:/app/models:ro
+      
+      # Logs directory (read-write)
+      - ./logs:/app/logs:rw
+    
+    environment:
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PYTHONUNBUFFERED: 1
+      
+      # AWS Configuration
+      AWS_REGION: ${REGION:-us-east-1}
+      AWS_DEFAULT_REGION: ${REGION:-us-east-1}
+      
+      # AWS Credentials (optional - will use IAM role if not provided)
+      # Uncomment and set if running locally without IAM role
+      # AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      # AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      # AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN}
+      
+      # CUDA (set to empty for CPU-only)
+      CUDA_VISIBLE_DEVICES: ""
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Resource limits (CPU-only)
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 8G
+        reservations:
+          cpus: '2.0'
+          memory: 4G
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Network
+    networks:
+      - kvs-infer-network
+
+networks:
+  kvs-infer-network:
+    driver: bridge
+
+# =============================================================================
+# Optional: Prometheus for metrics collection
+# =============================================================================
+# Uncomment below to add Prometheus service
+#
+#  prometheus:
+#    container_name: kvs-infer-prometheus
+#    image: prom/prometheus:latest
+#    ports:
+#      - "9090:9090"
+#    volumes:
+#      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+#      - prometheus-data:/prometheus
+#    command:
+#      - '--config.file=/etc/prometheus/prometheus.yml'
+#      - '--storage.tsdb.path=/prometheus'
+#    networks:
+#      - kvs-infer-network
+#    restart: unless-stopped
+#
+#volumes:
+#  prometheus-data:
+
+# =============================================================================
+# Optional: Grafana for visualization
+# =============================================================================
+# Uncomment below to add Grafana service
+#
+#  grafana:
+#    container_name: kvs-infer-grafana
+#    image: grafana/grafana:latest
+#    ports:
+#      - "3000:3000"
+#    volumes:
+#      - grafana-data:/var/lib/grafana
+#    environment:
+#      - GF_SECURITY_ADMIN_PASSWORD=admin
+#      - GF_USERS_ALLOW_SIGN_UP=false
+#    networks:
+#      - kvs-infer-network
+#    restart: unless-stopped
+#
+#volumes:
+#  grafana-data:

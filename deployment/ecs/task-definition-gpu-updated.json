@@ -1,0 +1,154 @@
+{
+  "family": "kvs-infer-gpu",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["EC2"],
+  "cpu": "4096",
+  "memory": "15360",
+  "executionRoleArn": "arn:aws:iam::065693560492:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::065693560492:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "kvs-infer",
+      "image": "065693560492.dkr.ecr.ap-southeast-1.amazonaws.com/kvs-infer:latest",
+      "cpu": 4096,
+      "memory": 15360,
+      "memoryReservation": 12288,
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "hostPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "AWS_REGION",
+          "value": "ap-southeast-1"
+        },
+        {
+          "name": "AWS_DEFAULT_REGION",
+          "value": "ap-southeast-1"
+        },
+        {
+          "name": "ROBOFLOW_API_KEY",
+          "value": "oBQpsjr25DqFZziUSMVN"
+        },
+        {
+          "name": "LOG_LEVEL",
+          "value": "INFO"
+        },
+        {
+          "name": "PYTHONUNBUFFERED",
+          "value": "1"
+        },
+        {
+          "name": "CUDA_VISIBLE_DEVICES",
+          "value": "0"
+        },
+        {
+          "name": "CONFIG_PATH",
+          "value": "/app/config/cameras.yaml"
+        },
+        {
+          "name": "KVS_STREAM_PREFIX",
+          "value": "stream"
+        },
+        {
+          "name": "KDS_STREAM_NAME",
+          "value": "kvs-detection-events"
+        },
+        {
+          "name": "S3_BUCKET_NAME",
+          "value": "kvs-inference-snapshots-065693560492"
+        },
+        {
+          "name": "S3_PREFIX",
+          "value": "snapshots"
+        },
+        {
+          "name": "DYNAMODB_TABLE_NAME",
+          "value": "kvs-inference-metadata"
+        }
+      ],
+      "mountPoints": [],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/kvs-infer-gpu",
+          "awslogs-region": "ap-southeast-1",
+          "awslogs-stream-prefix": "ecs",
+          "awslogs-create-group": "true"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8080/health || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 120
+      },
+      "resourceRequirements": [
+        {
+          "type": "GPU",
+          "value": "1"
+        }
+      ],
+      "linuxParameters": {
+        "devices": [
+          {
+            "hostPath": "/dev/nvidia0",
+            "containerPath": "/dev/nvidia0",
+            "permissions": [
+              "read",
+              "write",
+              "mknod"
+            ]
+          },
+          {
+            "hostPath": "/dev/nvidiactl",
+            "containerPath": "/dev/nvidiactl",
+            "permissions": [
+              "read",
+              "write",
+              "mknod"
+            ]
+          },
+          {
+            "hostPath": "/dev/nvidia-uvm",
+            "containerPath": "/dev/nvidia-uvm",
+            "permissions": [
+              "read",
+              "write",
+              "mknod"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "volumes": [],
+  "placementConstraints": [
+    {
+      "type": "memberOf",
+      "expression": "attribute:ecs.instance-type =~ g4dn.*"
+    }
+  ],
+  "tags": [
+    {
+      "key": "Environment",
+      "value": "production"
+    },
+    {
+      "key": "Application",
+      "value": "kvs-infer"
+    },
+    {
+      "key": "LaunchType",
+      "value": "EC2-GPU"
+    }
+  ]
+}

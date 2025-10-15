@@ -1,0 +1,160 @@
+{
+  "family": "kvs-infer-gpu",
+  "taskRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/kvs-infer-task-role",
+  "executionRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/kvs-infer-execution-role",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "EC2"
+  ],
+  "cpu": "4096",
+  "memory": "16384",
+  "containerDefinitions": [
+    {
+      "name": "kvs-infer",
+      "image": "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/kvs-infer:latest",
+      "essential": true,
+      "resourceRequirements": [
+        {
+          "type": "GPU",
+          "value": "1"
+        }
+      ],
+      "environment": [
+        {
+          "name": "AWS_REGION",
+          "value": "${AWS_REGION}"
+        },
+        {
+          "name": "AWS_DEFAULT_REGION",
+          "value": "${AWS_REGION}"
+        },
+        {
+          "name": "LOG_LEVEL",
+          "value": "INFO"
+        },
+        {
+          "name": "HTTP_PORT",
+          "value": "8080"
+        },
+        {
+          "name": "HTTP_HOST",
+          "value": "0.0.0.0"
+        },
+        {
+          "name": "CONFIG_FILE",
+          "value": "/app/config/cameras.yaml"
+        },
+        {
+          "name": "PYTHONUNBUFFERED",
+          "value": "1"
+        },
+        {
+          "name": "CUDA_VISIBLE_DEVICES",
+          "value": "0"
+        },
+        {
+          "name": "TORCH_HOME",
+          "value": "/app/.cache/torch"
+        }
+      ],
+      "secrets": [],
+      "mountPoints": [
+        {
+          "sourceVolume": "config",
+          "containerPath": "/app/config",
+          "readOnly": true
+        },
+        {
+          "sourceVolume": "models",
+          "containerPath": "/app/models",
+          "readOnly": true
+        },
+        {
+          "sourceVolume": "cache",
+          "containerPath": "/app/.cache",
+          "readOnly": false
+        }
+      ],
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8080/healthz || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 10,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/kvs-infer",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "ecs",
+          "awslogs-create-group": "true"
+        }
+      },
+      "ulimits": [
+        {
+          "name": "nofile",
+          "softLimit": 65536,
+          "hardLimit": 65536
+        }
+      ],
+      "linuxParameters": {
+        "capabilities": {
+          "add": [],
+          "drop": []
+        },
+        "devices": [],
+        "initProcessEnabled": true
+      }
+    }
+  ],
+  "volumes": [
+    {
+      "name": "config",
+      "host": {
+        "sourcePath": "/opt/kvs-infer/config"
+      }
+    },
+    {
+      "name": "models",
+      "host": {
+        "sourcePath": "/opt/kvs-infer/models"
+      }
+    },
+    {
+      "name": "cache",
+      "host": {
+        "sourcePath": "/opt/kvs-infer/cache"
+      }
+    }
+  ],
+  "placementConstraints": [
+    {
+      "type": "memberOf",
+      "expression": "attribute:ecs.instance-type =~ g4dn.*"
+    }
+  ],
+  "tags": [
+    {
+      "key": "Project",
+      "value": "kvs-infer"
+    },
+    {
+      "key": "Environment",
+      "value": "production"
+    },
+    {
+      "key": "ManagedBy",
+      "value": "ecs"
+    }
+  ]
+}

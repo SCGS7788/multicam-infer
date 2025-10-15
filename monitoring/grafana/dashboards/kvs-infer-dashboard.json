@@ -1,0 +1,186 @@
+{
+  "dashboard": {
+    "title": "KVS Inference Dashboard",
+    "uid": "kvs-infer-main",
+    "tags": ["kvs", "inference", "monitoring"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "5s",
+    "panels": [
+      {
+        "id": 1,
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "type": "graph",
+        "title": "Frame Processing Rate",
+        "targets": [
+          {
+            "expr": "rate(infer_frames_total[1m])",
+            "legendFormat": "{{camera_id}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "FPS"},
+          {"format": "short"}
+        ],
+        "xaxis": {"mode": "time"},
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "pointradius": 5,
+        "legend": {"show": true, "alignAsTable": true, "avg": true, "current": true}
+      },
+      {
+        "id": 2,
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "type": "graph",
+        "title": "Detection Events",
+        "targets": [
+          {
+            "expr": "rate(infer_events_total[1m])",
+            "legendFormat": "{{camera_id}} - {{type}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Events/sec"},
+          {"format": "short"}
+        ],
+        "xaxis": {"mode": "time"},
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "legend": {"show": true, "alignAsTable": true, "avg": true, "current": true}
+      },
+      {
+        "id": 3,
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "type": "graph",
+        "title": "Processing Latency (p95)",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(infer_latency_ms_bucket[1m]))",
+            "legendFormat": "{{camera_id}} - p95",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(infer_latency_ms_bucket[1m]))",
+            "legendFormat": "{{camera_id}} - p50",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "ms", "label": "Latency"},
+          {"format": "short"}
+        ],
+        "xaxis": {"mode": "time"},
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "legend": {"show": true, "alignAsTable": true, "avg": true, "current": true}
+      },
+      {
+        "id": 4,
+        "gridPos": {"x": 12, "y": 8, "w": 6, "h": 4},
+        "type": "stat",
+        "title": "Active Cameras",
+        "targets": [
+          {
+            "expr": "count(worker_alive == 1)",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none",
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 5,
+        "gridPos": {"x": 18, "y": 8, "w": 6, "h": 4},
+        "type": "stat",
+        "title": "Total Frames Processed",
+        "targets": [
+          {
+            "expr": "sum(infer_frames_total)",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 6,
+        "gridPos": {"x": 12, "y": 12, "w": 12, "h": 4},
+        "type": "table",
+        "title": "Worker Status",
+        "targets": [
+          {
+            "expr": "worker_alive",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true, "__name__": true},
+              "indexByName": {},
+              "renameByName": {
+                "camera_id": "Camera ID",
+                "Value": "Status"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "gridPos": {"x": 0, "y": 16, "w": 24, "h": 8},
+        "type": "graph",
+        "title": "Publisher Failures",
+        "targets": [
+          {
+            "expr": "rate(publisher_failures_total[1m])",
+            "legendFormat": "{{sink}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Failures/sec"},
+          {"format": "short"}
+        ],
+        "xaxis": {"mode": "time"},
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [0], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "name": "Publisher Failures Alert",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      }
+    ],
+    "time": {"from": "now-30m", "to": "now"},
+    "timepicker": {
+      "refresh_intervals": ["5s", "10s", "30s", "1m", "5m"]
+    }
+  }
+}

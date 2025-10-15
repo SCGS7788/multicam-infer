@@ -1,0 +1,103 @@
+{
+  "family": "kvs-infer-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["EC2"],
+  "cpu": "2048",
+  "memory": "4096",
+  "executionRoleArn": "arn:aws:iam::065693560492:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::065693560492:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "kvs-infer",
+      "image": "065693560492.dkr.ecr.ap-southeast-1.amazonaws.com/kvs-infer:latest",
+      "cpu": 2048,
+      "memory": 4096,
+      "memoryReservation": 3072,
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "hostPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "AWS_REGION",
+          "value": "ap-southeast-1"
+        },
+        {
+          "name": "AWS_DEFAULT_REGION",
+          "value": "ap-southeast-1"
+        },
+        {
+          "name": "ROBOFLOW_API_KEY",
+          "value": "oBQpsjr25DqFZziUSMVN"
+        },
+        {
+          "name": "LOG_LEVEL",
+          "value": "INFO"
+        },
+        {
+          "name": "PYTHONUNBUFFERED",
+          "value": "1"
+        },
+        {
+          "name": "CUDA_VISIBLE_DEVICES",
+          "value": "0"
+        }
+      ],
+      "mountPoints": [
+        {
+          "sourceVolume": "config",
+          "containerPath": "/app/config",
+          "readOnly": true
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/kvs-infer",
+          "awslogs-region": "ap-southeast-1",
+          "awslogs-stream-prefix": "ecs",
+          "awslogs-create-group": "true"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8080/healthz || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "resourceRequirements": [
+        {
+          "type": "GPU",
+          "value": "1"
+        }
+      ]
+    }
+  ],
+  "volumes": [
+    {
+      "name": "config",
+      "host": {
+        "sourcePath": "/opt/kvs-infer/config"
+      }
+    }
+  ],
+  "placementConstraints": [],
+  "tags": [
+    {
+      "key": "Environment",
+      "value": "production"
+    },
+    {
+      "key": "Application",
+      "value": "kvs-infer"
+    }
+  ]
+}

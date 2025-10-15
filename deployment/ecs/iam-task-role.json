@@ -1,0 +1,130 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "KinesisVideoStreamAccess",
+      "Effect": "Allow",
+      "Action": [
+        "kinesisvideo:DescribeStream",
+        "kinesisvideo:GetDataEndpoint",
+        "kinesisvideo:GetMedia"
+      ],
+      "Resource": [
+        "arn:aws:kinesisvideo:${AWS_REGION}:${AWS_ACCOUNT_ID}:stream/${KVS_STREAM_PREFIX}*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "${AWS_REGION}"
+        }
+      }
+    },
+    {
+      "Sid": "KinesisDataStreamAccess",
+      "Effect": "Allow",
+      "Action": [
+        "kinesis:DescribeStream",
+        "kinesis:DescribeStreamSummary",
+        "kinesis:PutRecord",
+        "kinesis:PutRecords"
+      ],
+      "Resource": [
+        "arn:aws:kinesis:${AWS_REGION}:${AWS_ACCOUNT_ID}:stream/${KDS_STREAM_NAME}"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "${AWS_REGION}"
+        }
+      }
+    },
+    {
+      "Sid": "S3SnapshotAccess",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:PutObjectAcl"
+      ],
+      "Resource": [
+        "arn:aws:s3:::${S3_BUCKET_NAME}/${S3_PREFIX}/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "s3:x-amz-server-side-encryption": "AES256"
+        }
+      }
+    },
+    {
+      "Sid": "S3BucketListAccess",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket",
+        "s3:GetBucketLocation"
+      ],
+      "Resource": [
+        "arn:aws:s3:::${S3_BUCKET_NAME}"
+      ],
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": [
+            "${S3_PREFIX}/*"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "DynamoDBAccess",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:GetItem",
+        "dynamodb:Query"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:${AWS_REGION}:${AWS_ACCOUNT_ID}:table/${DYNAMODB_TABLE_NAME}"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "${AWS_REGION}"
+        }
+      }
+    },
+    {
+      "Sid": "CloudWatchMetricsAccess",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:PutMetricData"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "cloudwatch:namespace": [
+            "KVS/Inference",
+            "ECS/ContainerInsights"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "SSMParameterAccess",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:GetParametersByPath"
+      ],
+      "Resource": [
+        "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/kvs-infer/*"
+      ]
+    },
+    {
+      "Sid": "SecretsManagerAccess",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": [
+        "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:kvs-infer/*"
+      ]
+    }
+  ]
+}

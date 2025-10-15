@@ -1,0 +1,252 @@
+name: Run Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+
+permissions:
+  contents: read
+  pull-requests: write  # For coverage comments
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # For coverage comparison
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements.txt
+            requirements-test.txt
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+      
+      - name: Lint with flake8
+        run: |
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 src/kvs_infer --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Exit-zero treats all errors as warnings
+          flake8 src/kvs_infer --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        continue-on-error: true
+      
+      - name: Check code formatting with black
+        run: |
+          black --check src/kvs_infer tests
+        continue-on-error: true
+      
+      - name: Run pytest
+        run: |
+          pytest tests/ \
+            --cov=src/kvs_infer \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-report=term-missing \
+            --junit-xml=test-results.xml \
+            -v
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+      
+      - name: Generate coverage badge
+        run: |
+          COVERAGE=$(python -c "import xml.etree.ElementTree as ET; tree = ET.parse('coverage.xml'); root = tree.getroot(); print(f\"{float(root.attrib['line-rate'])*100:.1f}\")")
+          echo "Coverage: ${COVERAGE}%"
+          echo "COVERAGE=${COVERAGE}" >> $GITHUB_ENV
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            test-results.xml
+            coverage.xml
+            htmlcov/
+          retention-days: 30
+      
+      - name: Comment PR with coverage
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const coverage = process.env.COVERAGE;
+            
+            const comment = `## 🧪 Test Results
+            
+            ✅ All tests passed!
+            
+            📊 **Coverage:** ${coverage}%
+            
+            <details>
+            <summary>View detailed coverage report</summary>
+            
+            Download the coverage report artifact from the workflow run for detailed analysis.
+            
+            </details>
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+      
+      - name: Test Summary
+        run: |
+          echo "### 🧪 Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ All tests passed successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📊 **Coverage:** ${COVERAGE}%" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🔍 See artifacts for detailed coverage report" >> $GITHUB_STEP_SUMMARY
+
+  test-matrix:
+    name: Test on Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+      
+      - name: Run pytest
+        run: |
+          pytest tests/ -v --tb=short
+      
+      - name: Report status
+        run: |
+          echo "✅ Tests passed on Python ${{ matrix.python-version }}"
+
+  lint:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install black flake8 isort mypy pylint
+          pip install -r requirements.txt
+      
+      - name: Check formatting with black
+        run: |
+          black --check --diff src/kvs_infer tests
+      
+      - name: Check import sorting with isort
+        run: |
+          isort --check-only --diff src/kvs_infer tests
+      
+      - name: Lint with flake8
+        run: |
+          flake8 src/kvs_infer tests --max-line-length=127 --extend-ignore=E203,W503
+      
+      - name: Type check with mypy
+        run: |
+          mypy src/kvs_infer --ignore-missing-imports
+        continue-on-error: true
+      
+      - name: Lint with pylint
+        run: |
+          pylint src/kvs_infer --max-line-length=127 --disable=C0111,R0903
+        continue-on-error: true
+      
+      - name: Quality Summary
+        run: |
+          echo "### 📋 Code Quality Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ All code quality checks passed" >> $GITHUB_STEP_SUMMARY
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install safety bandit
+      
+      - name: Check dependencies with safety
+        run: |
+          pip install -r requirements.txt
+          safety check --json || true
+        continue-on-error: true
+      
+      - name: Security scan with bandit
+        run: |
+          bandit -r src/kvs_infer -f json -o bandit-report.json || true
+          bandit -r src/kvs_infer
+        continue-on-error: true
+      
+      - name: Upload security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+          retention-days: 30

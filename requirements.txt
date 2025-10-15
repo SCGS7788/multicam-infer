@@ -1,0 +1,48 @@
+# kvs-infer: Python dependencies
+# Python 3.11
+
+# AWS SDK
+boto3>=1.34.0
+botocore>=1.34.0
+
+# Configuration & Validation
+pydantic>=2.0.0
+pyyaml>=6.0
+
+# Computer Vision & Video Processing
+opencv-python-headless>=4.8.0
+numpy>=1.24.0,<2.0.0
+
+# Deep Learning & Object Detection
+torch>=2.0.0
+torchvision>=0.15.0
+ultralytics>=8.0.0
+
+# OCR for ALPR
+paddleocr>=2.7.0
+paddlepaddle>=2.5.0
+
+# Alternative OCR (optional, comment out if not needed)
+# pytesseract>=0.3.10
+
+# Monitoring & Metrics
+prometheus-client>=0.19.0
+
+# Web Framework (for metrics/health endpoints)
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+# Image Processing
+Pillow>=10.0.0
+
+# Logging
+python-json-logger>=2.0.7
+
+# Development & Testing
+pytest>=8.0.0
+pytest-cov>=4.1.0
+pytest-mock>=3.12.0
+
+# Utilities
+python-dateutil>=2.8.2
+requests>=2.31.0

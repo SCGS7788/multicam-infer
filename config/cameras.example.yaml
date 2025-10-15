@@ -1,0 +1,369 @@
+# ============================================================================
+# kvs-infer Configuration Example
+# ============================================================================
+# Copy to cameras.yaml and customize for your deployment
+#
+# Supports environment variable expansion: ${ENV_VAR}
+# Supports context variables in routing: ${camera_id}
+
+# ============================================================================
+# Global Configuration
+# ============================================================================
+
+# AWS Configuration
+aws:
+  region: us-east-1
+
+# Global Publishers (defaults for all cameras)
+publishers:
+  kds_stream: detection-events        # Default Kinesis Data Stream
+  s3_bucket: my-detections-bucket     # Default S3 bucket
+  ddb_table: null                     # Optional DynamoDB table
+
+# Service Configuration
+service:
+  hls_session_seconds: 300            # HLS URL refresh interval (5 min)
+  reconnect_delay_seconds: 5          # Delay before reconnecting on error
+
+# Global Snapshots Configuration
+snapshots:
+  enabled: true
+  jpeg_quality: 90                    # JPEG compression quality (1-100)
+  image_format: jpg                   # jpg or png
+
+# Device Configuration
+device: cpu                           # cpu, cuda:0, cuda:1, etc.
+
+# Metrics Configuration
+metrics_enabled: true
+metrics_port: 9090
+metrics_host: "0.0.0.0"
+
+# Logging Configuration
+log_level: INFO                       # DEBUG, INFO, WARNING, ERROR, CRITICAL
+log_format: json                      # json or text
+
+# ============================================================================
+# Camera Configurations
+# ============================================================================
+
+cameras:
+  # ==========================================================================
+  # Camera 1: Front Entrance - Weapon Detection + ALPR
+  # ==========================================================================
+  - id: front-entrance
+    kvs_stream_name: front-entrance-stream
+    enabled: true
+    
+    # Playback Configuration
+    playback:
+      mode: HLS                       # HLS or GETMEDIA
+      retention_required: true        # Require data retention for HLS
+    
+    # Frame Processing
+    fps_target: 5                     # Process 5 frames per second
+    resize:                           # Optional: resize frames
+      width: 1280
+      height: 720
+    
+    # Region of Interest (optional)
+    roi:
+      enabled: true
+      polygons:
+        - name: entrance-door
+          points:
+            - [100, 200]
+            - [600, 200]
+            - [600, 800]
+            - [100, 800]
+        - name: parking-area
+          points:
+            - [700, 300]
+            - [1200, 300]
+            - [1200, 900]
+            - [700, 900]
+    
+    # Detection Pipeline (ordered execution)
+    pipeline:
+      # Weapon Detection
+      - type: weapon
+        enabled: true
+        weapon:
+          yolo_weights: s3://my-models/weapon-detector-v2.pt
+          classes:
+            - gun
+            - knife
+            - rifle
+            - pistol
+          conf_threshold: 0.6
+          nms_iou: 0.5
+          min_box:
+            width: 30
+            height: 30
+          temporal_confirm:            # Reduce false positives
+            frames: 3                  # Confirm over 3 frames
+            iou_threshold: 0.5
+      
+      # License Plate Recognition
+      - type: alpr
+        enabled: true
+        alpr:
+          plate_detector_weights: s3://my-models/plate-detector-v1.pt
+          ocr_engine: paddleocr
+          ocr_lang: en
+          conf_threshold: 0.7
+          crop_expand: 0.1             # Expand crop by 10% for OCR
+          min_box:
+            width: 50
+            height: 20
+    
+    # Routing Configuration
+    routing:
+      events:
+        to_kds: true
+        kds_stream_override: null      # Use global kds_stream
+      snapshot:
+        to_s3: true
+        prefix: snaps/${camera_id}/    # Expands to: snaps/front-entrance/
+        on_event_only: true            # Only save when detections occur
+        upload_crops: true             # Upload detection crops
+
+  # ==========================================================================
+  # Camera 2: Building Perimeter - Fire/Smoke Detection Only
+  # ==========================================================================
+  - id: building-perimeter
+    kvs_stream_name: perimeter-cam-stream
+    enabled: true
+    
+    # Playback Configuration
+    playback:
+      mode: HLS
+      retention_required: true
+    
+    # Frame Processing
+    fps_target: 3                      # Lower FPS for fire detection
+    resize: null                       # No resize, use native resolution
+    
+    # No ROI - monitor entire frame
+    roi:
+      enabled: false
+      polygons: []
+    
+    # Detection Pipeline
+    pipeline:
+      # Fire and Smoke Detection
+      - type: fire_smoke
+        enabled: true
+        fire_smoke:
+          yolo_weights: /models/fire-smoke-v3.pt  # Local path
+          conf_threshold: 0.5
+          nms_iou: 0.4
+          min_box:
+            width: 40
+            height: 40
+    
+    # Routing Configuration
+    routing:
+      events:
+        to_kds: true
+        kds_stream_override: fire-alerts  # Override: dedicated stream
+      snapshot:
+        to_s3: true
+        prefix: fire-detection/${camera_id}/
+        on_event_only: true
+        upload_crops: false            # Full frames only for fire
+
+  # ==========================================================================
+  # Camera 3: Parking Lot - ALPR with Thai Language
+  # ==========================================================================
+  - id: parking-lot-01
+    kvs_stream_name: parking-lot-stream
+    enabled: true
+    
+    playback:
+      mode: HLS
+      retention_required: true
+    
+    fps_target: 2                      # Lower FPS for parking lot
+    resize:
+      width: 1920
+      height: 1080
+    
+    # ROI for entry/exit lanes
+    roi:
+      enabled: true
+      polygons:
+        - name: entry-lane
+          points:
+            - [200, 400]
+            - [800, 400]
+            - [800, 800]
+            - [200, 800]
+        - name: exit-lane
+          points:
+            - [1000, 400]
+            - [1600, 400]
+            - [1600, 800]
+            - [1000, 800]
+    
+    # Detection Pipeline
+    pipeline:
+      # Thai License Plate Recognition
+      - type: alpr
+        enabled: true
+        alpr:
+          plate_detector_weights: s3://my-models/thai-plate-detector.pt
+          ocr_engine: paddleocr
+          ocr_lang: th                 # Thai language
+          conf_threshold: 0.75
+          crop_expand: 0.15
+          min_box:
+            width: 60
+            height: 25
+    
+    # Routing Configuration
+    routing:
+      events:
+        to_kds: true
+        kds_stream_override: alpr-events
+      snapshot:
+        to_s3: true
+        prefix: alpr/${camera_id}/
+        on_event_only: true
+        upload_crops: true
+
+  # ==========================================================================
+  # Camera 4: Disabled Example (for testing/maintenance)
+  # ==========================================================================
+  - id: maintenance-cam
+    kvs_stream_name: maintenance-stream
+    enabled: false                     # Camera disabled
+    
+    playback:
+      mode: HLS
+      retention_required: true
+    
+    fps_target: 5
+    resize: null
+    
+    roi:
+      enabled: false
+      polygons: []
+    
+    pipeline:
+      - type: weapon
+        enabled: true
+        weapon:
+          yolo_weights: s3://my-models/weapon-detector-v2.pt
+          classes: [gun, knife]
+          conf_threshold: 0.6
+          nms_iou: 0.5
+          min_box:
+            width: 30
+            height: 30
+          temporal_confirm: null       # No temporal confirmation
+    
+    routing:
+      events:
+        to_kds: true
+        kds_stream_override: null
+      snapshot:
+        to_s3: true
+        prefix: snaps/${camera_id}/
+        on_event_only: true
+        upload_crops: true
+
+# ============================================================================
+# Configuration Tips
+# ============================================================================
+#
+# 1. Device Selection:
+#    - CPU: device: cpu
+#    - Single GPU: device: cuda:0
+#    - Multiple GPUs: device: cuda:1, cuda:2, etc.
+#
+# 2. FPS Target:
+#    - High security: 10-15 FPS
+#    - Normal monitoring: 3-5 FPS
+#    - Low priority: 1-2 FPS
+#
+# 3. Model Weights:
+#    - S3: s3://bucket/path/to/model.pt
+#    - Local: /path/to/model.pt
+#    - Default: null (downloads pretrained)
+#
+# 4. ROI Configuration:
+#    - Use ROI to focus on specific areas
+#    - Improves performance and reduces false positives
+#    - Define multiple polygons for complex scenes
+#
+# 5. Temporal Confirmation:
+#    - Reduces false positives for weapon detection
+#    - Requires detection in N consecutive frames
+#    - Trades latency for accuracy
+#
+# 6. Environment Variables:
+#    - Use ${VAR} for environment variables
+#    - Example: s3_bucket: ${S3_BUCKET}
+#
+# 7. Context Variables:
+#    - ${camera_id} available in routing.snapshot.prefix
+#    - Automatically expands to camera ID
+#
+# 8. Playback Modes:
+#    - HLS: Standard latency (10-30s), simple, reliable
+#    - GETMEDIA: Low latency (1-3s), requires implementation
+#
+# ============================================================================
+# ADVANCED: GetMedia Mode (Low Latency) - Future Implementation
+# ============================================================================
+# When GetMedia is implemented, use this configuration for real-time streaming:
+#
+#  - id: realtime-camera
+#    kvs_stream_name: realtime-stream
+#    enabled: true
+#    
+#    # GetMedia Configuration (Low Latency)
+#    playback:
+#      mode: GETMEDIA                 # Use GetMedia API instead of HLS
+#      retention_required: false      # Not needed for GetMedia (live only)
+#      
+#      # GetMedia-specific settings (optional)
+#      getmedia:
+#        start_selector: NOW          # NOW, EARLIEST, SERVER_TIMESTAMP, PRODUCER_TIMESTAMP
+#        max_fragment_age_seconds: 30
+#        chunk_size: 65536            # Bytes per read (64KB default)
+#        reconnect_delay_seconds: 2
+#        max_reconnect_attempts: 10
+#        
+#        # Parser configuration
+#        parser:
+#          type: gstreamer            # gstreamer (recommended), kvs_parser, custom
+#          
+#        # Frame queue settings
+#        frame_queue:
+#          max_size: 100              # Drop frames if queue full (backpressure)
+#          timeout_seconds: 1.0
+#    
+#    fps_target: 30                   # Higher FPS possible with lower latency
+#    
+#    pipeline:
+#      - type: weapon
+#        enabled: true
+#        weapon:
+#          yolo_weights: s3://my-models/weapon-yolo.pt
+#          conf_threshold: 0.7
+#          temporal_confirm:
+#            frames: 2                # Reduce from 3 due to lower latency
+#            iou_threshold: 0.5
+#    
+#    routing:
+#      events:
+#        to_kds: true
+#        kds_stream_override: realtime-events  # Separate stream for real-time alerts
+#      snapshot:
+#        to_s3: true
+#        prefix: "realtime/${camera_id}/"
+#
+# Note: GetMedia mode requires additional setup. See docs/GETMEDIA_IMPLEMENTATION.md
+# ============================================================================

@@ -1,0 +1,57 @@
+{
+  "serviceName": "kvs-infer-service",
+  "cluster": "${ECS_CLUSTER_NAME}",
+  "taskDefinition": "kvs-infer-gpu",
+  "desiredCount": 1,
+  "launchType": "EC2",
+  "schedulingStrategy": "REPLICA",
+  "deploymentConfiguration": {
+    "deploymentCircuitBreaker": {
+      "enable": true,
+      "rollback": true
+    },
+    "maximumPercent": 200,
+    "minimumHealthyPercent": 100
+  },
+  "networkConfiguration": {
+    "awsvpcConfiguration": {
+      "subnets": [
+        "${PRIVATE_SUBNET_1}",
+        "${PRIVATE_SUBNET_2}"
+      ],
+      "securityGroups": [
+        "${SECURITY_GROUP_ID}"
+      ],
+      "assignPublicIp": "DISABLED"
+    }
+  },
+  "healthCheckGracePeriodSeconds": 60,
+  "enableECSManagedTags": true,
+  "propagateTags": "SERVICE",
+  "tags": [
+    {
+      "key": "Project",
+      "value": "kvs-infer"
+    },
+    {
+      "key": "Environment",
+      "value": "production"
+    },
+    {
+      "key": "ManagedBy",
+      "value": "ecs"
+    }
+  ],
+  "enableExecuteCommand": true,
+  "placementConstraints": [],
+  "placementStrategy": [
+    {
+      "type": "spread",
+      "field": "attribute:ecs.availability-zone"
+    },
+    {
+      "type": "spread",
+      "field": "instanceId"
+    }
+  ]
+}

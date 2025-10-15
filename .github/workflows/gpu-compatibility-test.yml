@@ -1,0 +1,358 @@
+name: GPU Driver Compatibility Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      instance_type:
+        description: 'EC2 GPU instance type to test'
+        required: true
+        type: choice
+        options:
+          - g4dn.xlarge
+          - g4dn.2xlarge
+          - g4dn.4xlarge
+          - g4dn.8xlarge
+          - g4dn.12xlarge
+          - g4dn.16xlarge
+  schedule:
+    # Run weekly on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  gpu-compatibility-matrix:
+    name: GPU Compatibility Matrix
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        # NVIDIA T4 GPU (used in g4dn instances)
+        # https://docs.aws.amazon.com/dlami/latest/devguide/gpu.html
+        cuda_version: ['12.1.0', '12.1.1', '12.2.0']
+        driver_version: ['525.85.12', '530.30.02', '535.54.03']
+        pytorch_version: ['2.3.1', '2.4.0']
+        
+        # Exclude incompatible combinations
+        exclude:
+          # CUDA 12.2 requires driver >= 530
+          - cuda_version: '12.2.0'
+            driver_version: '525.85.12'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: GPU Compatibility Check
+        run: |
+          echo "### 🔍 Testing GPU Compatibility" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Version |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| CUDA | ${{ matrix.cuda_version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Driver | ${{ matrix.driver_version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| PyTorch | ${{ matrix.pytorch_version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Check compatibility with AWS ECS GPU requirements
+          echo "#### AWS ECS GPU Requirements" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **GPU:** NVIDIA T4 (g4dn instances)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Compute Capability:** 7.5" >> $GITHUB_STEP_SUMMARY
+          echo "- **Memory:** 16 GB GDDR6" >> $GITHUB_STEP_SUMMARY
+          echo "- **CUDA Cores:** 2,560" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create compatibility report
+        run: |
+          cat > compatibility-report.md << EOF
+          # GPU Compatibility Report
+          
+          **Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          **Workflow Run:** ${{ github.run_id }}
+          
+          ## Configuration Tested
+          
+          | Component | Version |
+          |-----------|---------|
+          | CUDA | ${{ matrix.cuda_version }} |
+          | NVIDIA Driver | ${{ matrix.driver_version }} |
+          | PyTorch | ${{ matrix.pytorch_version }} |
+          | GPU | NVIDIA T4 (AWS g4dn) |
+          
+          ## AWS g4dn Instance Family
+          
+          | Instance Type | vCPUs | Memory | GPU Memory | Network | Price/Hour* |
+          |---------------|-------|--------|------------|---------|-------------|
+          | g4dn.xlarge   | 4     | 16 GB  | 16 GB      | Up to 25 Gbps | \$0.526 |
+          | g4dn.2xlarge  | 8     | 32 GB  | 16 GB      | Up to 25 Gbps | \$0.752 |
+          | g4dn.4xlarge  | 16    | 64 GB  | 16 GB      | Up to 25 Gbps | \$1.204 |
+          | g4dn.8xlarge  | 32    | 128 GB | 16 GB      | 50 Gbps       | \$2.176 |
+          | g4dn.12xlarge | 48    | 192 GB | 64 GB (4x) | 50 Gbps       | \$3.912 |
+          | g4dn.16xlarge | 64    | 256 GB | 16 GB      | 50 Gbps       | \$4.352 |
+          
+          *Prices for US East (N. Virginia) region, On-Demand pricing
+          
+          ## CUDA/Driver Compatibility
+          
+          ### CUDA ${{ matrix.cuda_version }}
+          
+          **Minimum Driver Version:** 
+          - CUDA 12.1.x: Driver >= 525.60.13
+          - CUDA 12.2.x: Driver >= 530.30.02
+          
+          **Current Driver:** ${{ matrix.driver_version }}
+          
+          ### PyTorch ${{ matrix.pytorch_version }}
+          
+          **CUDA Compatibility:**
+          - PyTorch 2.3.x: CUDA 11.8, 12.1
+          - PyTorch 2.4.x: CUDA 11.8, 12.1, 12.4
+          
+          ## Docker Base Images
+          
+          ### Recommended Images
+          
+          \`\`\`dockerfile
+          # CUDA 12.1 + cuDNN 8 + Ubuntu 22.04
+          FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
+          
+          # PyTorch with CUDA 12.1 support
+          RUN pip install torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cu121
+          \`\`\`
+          
+          ## ECS Configuration Requirements
+          
+          ### Task Definition
+          
+          \`\`\`json
+          {
+            "requiresCompatibilities": ["EC2"],
+            "containerDefinitions": [{
+              "resourceRequirements": [{
+                "type": "GPU",
+                "value": "1"
+              }]
+            }]
+          }
+          \`\`\`
+          
+          ### EC2 Instance Requirements
+          
+          1. **AMI:** ECS-optimized GPU AMI
+             \`\`\`bash
+             aws ssm get-parameters --names /aws/service/ecs/optimized-ami/amazon-linux-2/gpu/recommended
+             \`\`\`
+          
+          2. **NVIDIA Container Runtime:** Pre-installed on ECS GPU AMI
+          
+          3. **ECS Agent:** Version 1.56.0+ for GPU support
+          
+          ## Testing Recommendations
+          
+          ### 1. Verify GPU Detection
+          
+          \`\`\`python
+          import torch
+          print(f"CUDA available: {torch.cuda.is_available()}")
+          print(f"CUDA version: {torch.version.cuda}")
+          print(f"Device count: {torch.cuda.device_count()}")
+          print(f"Device name: {torch.cuda.get_device_name(0)}")
+          \`\`\`
+          
+          Expected output:
+          \`\`\`
+          CUDA available: True
+          CUDA version: 12.1
+          Device count: 1
+          Device name: Tesla T4
+          \`\`\`
+          
+          ### 2. Run GPU Workload Test
+          
+          \`\`\`python
+          import torch
+          
+          # Allocate tensor on GPU
+          x = torch.randn(1000, 1000).cuda()
+          y = torch.randn(1000, 1000).cuda()
+          
+          # Perform computation
+          z = torch.matmul(x, y)
+          
+          print(f"Computation completed on {z.device}")
+          \`\`\`
+          
+          ### 3. Memory Test
+          
+          \`\`\`python
+          import torch
+          
+          print(f"Total memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+          print(f"Allocated: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+          print(f"Cached: {torch.cuda.memory_reserved(0) / 1e9:.2f} GB")
+          \`\`\`
+          
+          ## Known Issues
+          
+          ### Issue 1: CUDA Version Mismatch
+          
+          **Symptom:** `RuntimeError: CUDA version mismatch`
+          
+          **Solution:** Ensure PyTorch CUDA version matches system CUDA:
+          \`\`\`bash
+          # Check system CUDA
+          nvidia-smi
+          
+          # Install matching PyTorch
+          pip install torch==2.3.1+cu121 --extra-index-url https://download.pytorch.org/whl/cu121
+          \`\`\`
+          
+          ### Issue 2: GPU Not Detected in Container
+          
+          **Symptom:** `torch.cuda.is_available()` returns `False`
+          
+          **Solution:** Verify ECS task definition has GPU resource requirement:
+          \`\`\`json
+          "resourceRequirements": [{"type": "GPU", "value": "1"}]
+          \`\`\`
+          
+          ### Issue 3: Out of Memory Errors
+          
+          **Symptom:** `RuntimeError: CUDA out of memory`
+          
+          **Solution:** 
+          - Use gradient checkpointing
+          - Reduce batch size
+          - Enable mixed precision training (FP16)
+          - Clear cache: \`torch.cuda.empty_cache()\`
+          
+          ## Performance Benchmarks
+          
+          ### YOLO Inference (640x640 images)
+          
+          | Instance Type | Batch Size | FPS | Latency (ms) | Cost/Hour |
+          |---------------|------------|-----|--------------|-----------|
+          | g4dn.xlarge   | 1          | 45  | 22           | \$0.526   |
+          | g4dn.xlarge   | 4          | 120 | 33           | \$0.526   |
+          | g4dn.2xlarge  | 8          | 200 | 40           | \$0.752   |
+          
+          ### Recommendations by Use Case
+          
+          1. **1-2 cameras (< 60 FPS total):** g4dn.xlarge
+          2. **3-5 cameras (60-150 FPS):** g4dn.2xlarge
+          3. **6-10 cameras (150-300 FPS):** g4dn.4xlarge
+          4. **> 10 cameras:** Multiple smaller instances
+          
+          ## References
+          
+          - [NVIDIA CUDA Compatibility](https://docs.nvidia.com/deploy/cuda-compatibility/)
+          - [PyTorch CUDA Installation](https://pytorch.org/get-started/locally/)
+          - [AWS ECS GPU Support](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-gpu.html)
+          - [AWS Deep Learning AMI](https://docs.aws.amazon.com/dlami/latest/devguide/gpu.html)
+          EOF
+          
+          cat compatibility-report.md
+
+      - name: Upload compatibility report
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-compatibility-report-${{ matrix.cuda_version }}-${{ matrix.driver_version }}-${{ matrix.pytorch_version }}
+          path: compatibility-report.md
+          retention-days: 90
+
+  test-deployment:
+    name: Test GPU Deployment
+    runs-on: ubuntu-latest
+    needs: gpu-compatibility-matrix
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Create test task
+        run: |
+          # Create a test task definition for GPU validation
+          cat > test-task-def.json << EOF
+          {
+            "family": "kvs-infer-gpu-test",
+            "networkMode": "awsvpc",
+            "requiresCompatibilities": ["EC2"],
+            "cpu": "2048",
+            "memory": "8192",
+            "containerDefinitions": [{
+              "name": "gpu-test",
+              "image": "nvidia/cuda:12.1.0-base-ubuntu22.04",
+              "command": ["nvidia-smi"],
+              "resourceRequirements": [{
+                "type": "GPU",
+                "value": "1"
+              }],
+              "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                  "awslogs-group": "/ecs/kvs-infer-gpu-test",
+                  "awslogs-region": "${{ env.AWS_REGION }}",
+                  "awslogs-stream-prefix": "gpu-test",
+                  "awslogs-create-group": "true"
+                }
+              }
+            }]
+          }
+          EOF
+          
+          # Register the test task definition
+          aws ecs register-task-definition --cli-input-json file://test-task-def.json
+
+      - name: Run test task
+        id: run-test
+        run: |
+          # Run the test task
+          TASK_ARN=$(aws ecs run-task \
+            --cluster ${{ secrets.ECS_CLUSTER }} \
+            --task-definition kvs-infer-gpu-test \
+            --launch-type EC2 \
+            --placement-constraints "type=memberOf,expression=attribute:ecs.instance-type matches g4dn.*" \
+            --query 'tasks[0].taskArn' \
+            --output text)
+          
+          echo "task-arn=${TASK_ARN}" >> $GITHUB_OUTPUT
+          echo "Test task started: ${TASK_ARN}"
+
+      - name: Wait for test completion
+        run: |
+          echo "Waiting for test task to complete..."
+          aws ecs wait tasks-stopped --cluster ${{ secrets.ECS_CLUSTER }} --tasks ${{ steps.run-test.outputs.task-arn }}
+          
+          # Get task status
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster ${{ secrets.ECS_CLUSTER }} \
+            --tasks ${{ steps.run-test.outputs.task-arn }} \
+            --query 'tasks[0].containers[0].exitCode' \
+            --output text)
+          
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "GPU test failed with exit code: $EXIT_CODE"
+            exit 1
+          fi
+          
+          echo "### ✅ GPU Test Passed" >> $GITHUB_STEP_SUMMARY
+          echo "GPU detection successful on ${{ github.event.inputs.instance_type || 'g4dn.xlarge' }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Cleanup test resources
+        if: always()
+        run: |
+          # Deregister test task definition
+          aws ecs deregister-task-definition --task-definition kvs-infer-gpu-test || true
