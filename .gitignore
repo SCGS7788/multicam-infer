@@ -1,0 +1,80 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Configuration (keep example files)
+config/cameras.yaml
+config/*.yaml
+!config/*.example.yaml
+
+# Model files
+*.pt
+*.pth
+*.onnx
+models/
+
+# Datasets (large files - do not commit)
+CCTV-Gun-detection-1/
+CCTV-Gun-detection-2/
+CCTV-Gun-detection*/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# AWS
+.aws/
+
+# Environment variables
+.env
+.env.local
+
+# Temporary files
+tmp/
+temp/
