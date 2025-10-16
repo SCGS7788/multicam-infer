@@ -1,6 +1,6 @@
 # =============================================================================
 # kvs-infer: Multi-camera inference pipeline for Kinesis Video Streams
-# GPU-enabled Docker image with CUDA support
+# GPU-enabled Docker image with CUDA support (OPTIMIZED for smaller size)
 # =============================================================================
 
 # Use PyTorch base image with CUDA 12.1 support
@@ -9,40 +9,34 @@ FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime
 # Metadata
 LABEL maintainer="kvs-infer"
 LABEL description="Multi-camera inference pipeline with GPU support"
-LABEL version="1.0"
+LABEL version="1.1-optimized"
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    # Video processing
+# Install system dependencies (minimal set)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Essential only
     ffmpeg \
-    libavcodec-dev \
-    libavformat-dev \
-    libswscale-dev \
-    # OpenCV dependencies
     libgl1-mesa-glx \
     libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgomp1 \
-    # Networking
     curl \
-    wget \
-    # Development tools
-    git \
-    vim \
-    # Cleanup
-    && rm -rf /var/lib/apt/lists/*
+    ca-certificates \
+    # Cleanup aggressively
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean \
+    && rm -rf /tmp/* /var/tmp/*
 
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies (optimized)
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir -r requirements.txt && \
+    # Remove pip cache
+    rm -rf /root/.cache/pip && \
+    # Remove unnecessary files
+    find /opt/conda -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
 
 # Copy application code
 COPY src/kvs_infer/ ./kvs_infer/
@@ -55,7 +49,9 @@ COPY deployment/ecs/cameras-ecs.yaml ./config/cameras.yaml
 ENV PYTHONPATH=/app:$PYTHONPATH
 
 # Create directories for models, logs, and cache
-RUN mkdir -p /app/models /app/logs /app/.cache
+RUN mkdir -p /app/models /app/logs /app/.cache && \
+    # Final cleanup
+    rm -rf /tmp/* /var/tmp/* /root/.cache
 
 # Environment variables
 ENV LOG_LEVEL=INFO
