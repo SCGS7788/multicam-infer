@@ -8,9 +8,12 @@ aws:
 
 # Global Publishers
 publishers:
-  kds_stream: kvs-detection-events
-  s3_bucket: kvs-inference-snapshots-065693560492
-  ddb_table: kvs-inference-metadata
+  kds:
+    stream_name: kvs-detection-events
+  s3:
+    bucket: kvs-inference-snapshots-065693560492
+  ddb:
+    table_name: kvs-inference-metadata
 
 # Service Configuration
 service:
