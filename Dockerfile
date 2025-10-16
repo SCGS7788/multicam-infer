@@ -45,8 +45,11 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY src/ ./src/
-COPY config/ ./config/
+COPY src/kvs_infer/ ./kvs_infer/
+
+# Create config directory and copy config file
+RUN mkdir -p ./config
+COPY deployment/ecs/cameras-ecs.yaml ./config/cameras.yaml
 
 # Set Python path
 ENV PYTHONPATH=/app:$PYTHONPATH
@@ -72,5 +75,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8080/healthz || exit 1
 
 # Default command (override with docker run command)
-# Usage: docker run kvs-infer --config /app/config/cameras.yaml --http 0.0.0.0:8080
-CMD ["python", "-m", "kvs_infer.app", "--config", "config/cameras.yaml", "--http", "0.0.0.0:8080"]
+# Usage: docker run kvs-infer
+CMD ["python", "-m", "kvs_infer", "--config", "config/cameras.yaml", "--http", "0.0.0.0:8080"]
