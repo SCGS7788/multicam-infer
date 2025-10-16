@@ -42,6 +42,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
 COPY src/kvs_infer/ ./kvs_infer/
 
 # Create config directory and copy config file
+# Updated: 2025-10-17 - Fixed config format (dict instead of list)
 RUN mkdir -p ./config
 COPY deployment/ecs/cameras-ecs.yaml ./config/cameras.yaml
 
