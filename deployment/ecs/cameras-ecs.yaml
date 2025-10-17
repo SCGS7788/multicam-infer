@@ -1,5 +1,5 @@
 # ============================================================================
-# kvs-infer Configuration for ECS Deployment
+# kvs-infer Configuration for ECS Deployment (FIXED)
 # ============================================================================
 
 # AWS Configuration
@@ -39,12 +39,11 @@ log_level: INFO
 log_format: json
 
 # ============================================================================
-# Camera Configurations
+# Camera Configurations (DICT FORMAT - NOT LIST)
 # ============================================================================
 
 cameras:
-  # Stream C01 - Gun Detection
-  - id: stream-C01
+  stream-C01:
     kvs_stream_name: stream-C01
     enabled: true
     
@@ -63,12 +62,13 @@ cameras:
           iou_threshold: 0.5
     
     publishers:
-      kds_stream: kvs-detection-events
-      s3_bucket: kvs-inference-snapshots-065693560492
-      s3_prefix: "stream-C01/"
+      kds:
+        stream_name: kvs-detection-events
+      s3:
+        bucket: kvs-inference-snapshots-065693560492
+        prefix: "stream-C01/"
 
-  # Stream C02 - Gun Detection
-  - id: stream-C02
+  stream-C02:
     kvs_stream_name: stream-C02
     enabled: true
     
@@ -87,12 +87,13 @@ cameras:
           iou_threshold: 0.5
     
     publishers:
-      kds_stream: kvs-detection-events
-      s3_bucket: kvs-inference-snapshots-065693560492
-      s3_prefix: "stream-C02/"
+      kds:
+        stream_name: kvs-detection-events
+      s3:
+        bucket: kvs-inference-snapshots-065693560492
+        prefix: "stream-C02/"
 
-  # Stream C03 - Gun Detection
-  - id: stream-C03
+  stream-C03:
     kvs_stream_name: stream-C03
     enabled: true
     
@@ -111,6 +112,8 @@ cameras:
           iou_threshold: 0.5
     
     publishers:
-      kds_stream: kvs-detection-events
-      s3_bucket: kvs-inference-snapshots-065693560492
-      s3_prefix: "stream-C03/"
+      kds:
+        stream_name: kvs-detection-events
+      s3:
+        bucket: kvs-inference-snapshots-065693560492
+        prefix: "stream-C03/"
