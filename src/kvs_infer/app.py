@@ -307,11 +307,18 @@ class CameraWorker:
     
     def _initialize_frame_source(self):
         """Initialize KVS HLS frame source."""
+        # Support both config formats:
+        # 1. kvs_stream_name at camera level (current format)
+        # 2. kvs.stream_name nested (old format)
         kvs_config = self.camera_config.get("kvs", {})
+        stream_name = (
+            self.camera_config.get("kvs_stream_name") or  # New format
+            kvs_config.get("stream_name")  # Old format
+        )
         
         self.frame_source = KVSHLSFrameSource(
             camera_id=self.camera_id,
-            stream_name=kvs_config.get("stream_name"),
+            stream_name=stream_name,
             region=kvs_config.get("region", "us-east-1"),
             hls_session_seconds=kvs_config.get("hls_session_seconds", 300),
             reconnect_delay=kvs_config.get("reconnect_delay_sec", 5)
@@ -323,7 +330,7 @@ class CameraWorker:
             f"Frame source initialized: {self.camera_id}",
             extra={
                 "camera_id": self.camera_id,
-                "stream_name": kvs_config.get("stream_name")
+                "stream_name": stream_name
             }
         )
     
@@ -713,14 +720,7 @@ class Application:
         """Start camera worker threads."""
         logger.info("Starting camera workers")
         
-        cameras_raw = self.config.get("cameras", {})
-        
-        # Handle both dict and list formats
-        if isinstance(cameras_raw, list):
-            # Convert list to dict using camera 'id' field
-            cameras = {cam.get("id", f"camera-{i}"): cam for i, cam in enumerate(cameras_raw)}
-        else:
-            cameras = cameras_raw
+        cameras = self.config.get("cameras", {})
         
         for camera_id, camera_config in cameras.items():
             # Skip disabled cameras
