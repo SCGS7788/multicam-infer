@@ -713,7 +713,14 @@ class Application:
         """Start camera worker threads."""
         logger.info("Starting camera workers")
         
-        cameras = self.config.get("cameras", {})
+        cameras_raw = self.config.get("cameras", {})
+        
+        # Handle both dict and list formats
+        if isinstance(cameras_raw, list):
+            # Convert list to dict using camera 'id' field
+            cameras = {cam.get("id", f"camera-{i}"): cam for i, cam in enumerate(cameras_raw)}
+        else:
+            cameras = cameras_raw
         
         for camera_id, camera_config in cameras.items():
             # Skip disabled cameras
