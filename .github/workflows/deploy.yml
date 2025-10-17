@@ -18,11 +18,11 @@ on:
           - staging
 
 env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-  ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
-  ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
-  ECS_TASK_DEFINITION: ${{ secrets.ECS_TASK_DEFINITION }}
+  AWS_REGION: ap-southeast-1
+  ECR_REPOSITORY: kvs-infer
+  ECS_CLUSTER: vivid-fish-il1akc
+  ECS_SERVICE: kvs-infer-gpu
+  ECS_TASK_DEFINITION: kvs-infer-gpu
   CONTAINER_NAME: kvs-infer
 
 permissions:
@@ -146,7 +146,7 @@ jobs:
     needs: build
     environment:
       name: ${{ github.event.inputs.environment || 'production' }}
-      url: https://console.aws.amazon.com/ecs/v2/clusters/${{ secrets.ECS_CLUSTER }}/services/${{ secrets.ECS_SERVICE }}
+      url: https://console.aws.amazon.com/ecs/v2/clusters/${{ env.ECS_CLUSTER }}/services/${{ env.ECS_SERVICE }}
     
     steps:
       - name: Checkout code
